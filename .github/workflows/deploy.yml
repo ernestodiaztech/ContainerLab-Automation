@@ -1,0 +1,90 @@
+name: Deploy to Lab
+
+on:
+  workflow_dispatch:  # Manual trigger
+  push:
+    branches: [ main ]
+    paths:
+      - 'playbooks/**'
+      - 'inventory/**'
+
+jobs:
+  deploy:
+    name: Deploy Configuration
+    runs-on: self-hosted
+    environment: production  # Requires approval if configured
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Setup SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          echo "${{ secrets.SSH_KNOWN_HOSTS }}" > ~/.ssh/known_hosts
+
+      - name: Activate Python Environment
+        run: |
+          source ~/ansible-env/ansible-venv/bin/activate
+          echo "PATH=$PATH" >> $GITHUB_ENV
+
+      - name: Pre-deployment Backup
+        run: |
+          ansible-playbook -i inventory/netbox_inventory.yml \
+            playbooks/backup-configs.yml
+        env:
+          DOCKER_HOST: ${{ secrets.DOCKER_HOST }}
+
+      - name: Deploy Configuration
+        id: deploy
+        run: |
+          ansible-playbook -i inventory/netbox_inventory.yml \
+            playbooks/netbox-driven-config.yml \
+            --diff \
+            -v
+        env:
+          DOCKER_HOST: ${{ secrets.DOCKER_HOST }}
+          NETBOX_API: http://10.33.99.14
+          NETBOX_TOKEN: ${{ secrets.NETBOX_API_TOKEN }}
+
+      - name: Verify Deployment
+        run: |
+          ansible-playbook -i inventory/netbox_inventory.yml \
+            playbooks/test-connectivity.yml
+        env:
+          DOCKER_HOST: ${{ secrets.DOCKER_HOST }}
+
+      - name: Update NetBox with Deployment Status
+        if: always()
+        run: |
+          python3 << EOF
+          import requests
+          import os
+          from datetime import datetime
+          
+          netbox_url = "http://10.33.99.14"
+          token = "${{ secrets.NETBOX_API_TOKEN }}"
+          
+          status = "success" if "${{ steps.deploy.outcome }}" == "success" else "failed"
+          
+          data = {
+              "assigned_object_type": "dcim.device",
+              "assigned_object_id": 1,  # Update with actual device ID
+              "kind": "info" if status == "success" else "warning",
+              "comments": f"CI/CD Deployment {status} at {datetime.now().isoformat()}\nCommit: ${{ github.sha }}"
+          }
+          
+          response = requests.post(
+              f"{netbox_url}/api/extras/journal-entries/",
+              headers={"Authorization": f"Token {token}", "Content-Type": "application/json"},
+              json=data
+          )
+          print(f"NetBox updated: {response.status_code}")
+          EOF
+
+      - name: Notification
+        if: always()
+        run: |
+          echo "Deployment ${{ steps.deploy.outcome }}: Commit ${{ github.sha }}"

@@ -1,0 +1,51 @@
+name: Scheduled Configuration Backup
+
+on:
+  schedule:
+    - cron: '0 2 * * *'  # Daily at 2 AM
+  workflow_dispatch:     # Manual trigger
+
+jobs:
+  backup:
+    name: Backup Network Configurations
+    runs-on: self-hosted
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Setup SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          echo "${{ secrets.SSH_KNOWN_HOSTS }}" > ~/.ssh/known_hosts
+
+      - name: Run Backup Playbook
+        run: |
+          ansible-playbook -i inventory/netbox_inventory.yml \
+            playbooks/backup-configs.yml
+        env:
+          DOCKER_HOST: ${{ secrets.DOCKER_HOST }}
+
+      - name: Create backup archive
+        run: |
+          DATE=$(date +%Y%m%d-%H%M%S)
+          mkdir -p backups
+          tar -czf backups/network-backup-${DATE}.tar.gz \
+            ~/backups/$(date +%Y%m%d)/*.txt
+
+      - name: Upload backup artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: network-backup-${{ github.run_number }}
+          path: backups/*.tar.gz
+          retention-days: 90
+
+      - name: Commit backup to repository
+        run: |
+          git config user.name "GitHub Actions"
+          git config user.email "actions@github.com"
+          git add backups/
+          git diff --quiet && git diff --staged --quiet || \
+            (git commit -m "Automated backup $(date +%Y-%m-%d)" && git push)

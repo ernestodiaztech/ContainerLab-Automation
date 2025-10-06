@@ -1,0 +1,134 @@
+name: Network Automation CI
+
+on:
+  push:
+    branches: [ main, develop ]
+    paths:
+      - 'playbooks/**'
+      - 'inventory/**'
+      - 'group_vars/**'
+      - 'host_vars/**'
+      - 'roles/**'
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  validate:
+    name: Validate Configuration
+    runs-on: self-hosted
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install ansible yamllint ansible-lint netaddr pynetbox
+
+      - name: YAML Lint
+        run: |
+          yamllint -c .yamllint playbooks/ inventory/
+        continue-on-error: false
+
+      - name: Ansible Syntax Check
+        run: |
+          ansible-playbook --syntax-check playbooks/*.yml
+        env:
+          ANSIBLE_CONFIG: ./ansible.cfg
+
+      - name: Ansible Lint
+        run: |
+          ansible-lint playbooks/
+        continue-on-error: true
+
+      - name: Validate NetBox Inventory
+        run: |
+          ansible-inventory -i inventory/netbox_inventory.yml --list > /dev/null
+        env:
+          NETBOX_API: http://10.33.99.14
+          NETBOX_TOKEN: ${{ secrets.NETBOX_API_TOKEN }}
+
+  test:
+    name: Test Playbooks (Dry Run)
+    runs-on: self-hosted
+    needs: validate
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Setup SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          echo "${{ secrets.SSH_KNOWN_HOSTS }}" > ~/.ssh/known_hosts
+
+      - name: Test Connectivity Playbook (Dry Run)
+        run: |
+          ansible-playbook -i inventory/netbox_inventory.yml \
+            playbooks/test-connectivity.yml \
+            --check \
+            --diff
+        env:
+          DOCKER_HOST: ${{ secrets.DOCKER_HOST }}
+          NETBOX_TOKEN: ${{ secrets.NETBOX_API_TOKEN }}
+
+      - name: Test Configuration Playbook (Dry Run)
+        run: |
+          ansible-playbook -i inventory/netbox_inventory.yml \
+            playbooks/basic-config.yml \
+            --check \
+            --diff \
+            -v
+        env:
+          DOCKER_HOST: ${{ secrets.DOCKER_HOST }}
+
+      - name: Generate Configuration Preview
+        run: |
+          ansible-playbook -i inventory/netbox_inventory.yml \
+            playbooks/basic-config.yml \
+            --check \
+            --diff \
+            > /tmp/config-preview.txt 2>&1 || true
+          
+      - name: Upload Configuration Preview
+        uses: actions/upload-artifact@v3
+        with:
+          name: config-preview
+          path: /tmp/config-preview.txt
+          retention-days: 30
+
+  security-scan:
+    name: Security Scanning
+    runs-on: self-hosted
+    needs: validate
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Check for secrets in code
+        run: |
+          # Simple check for common secret patterns
+          ! grep -r -i "password\s*=" playbooks/ || exit 1
+          ! grep -r -i "api.key\s*=" playbooks/ || exit 1
+          ! grep -r "BEGIN.*PRIVATE KEY" . || exit 1
+          echo "No secrets found in code"
+
+      - name: Validate Ansible Vault files
+        run: |
+          # Ensure vault files are encrypted
+          if [ -f "group_vars/all/vault.yml" ]; then
+            if ! grep -q "\$ANSIBLE_VAULT" group_vars/all/vault.yml; then
+              echo "ERROR: Vault file is not encrypted!"
+              exit 1
+            fi
+          fi
+          echo "Vault files are properly encrypted"
