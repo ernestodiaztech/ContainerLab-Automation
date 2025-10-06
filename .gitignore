@@ -1,0 +1,35 @@
+# Ansible
+*.retry
+.ansible/
+*.pyc
+__pycache__/
+
+# Virtual Environment
+venv/
+ansible-venv/
+.venv/
+
+# Secrets (NEVER commit these)
+*vault*
+*secret*
+*password*
+group_vars/all/vault.yml
+host_vars/*/vault.yml
+
+# Temporary files
+*.tmp
+*.log
+*.swp
+.DS_Store
+
+# Backup files
+*.bak
+*~
+
+# IDE
+.vscode/
+.idea/
+
+# Environment files
+.env
+.env.local

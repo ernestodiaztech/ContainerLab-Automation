@@ -1,0 +1,40 @@
+---
+- name: Configure devices based on NetBox data
+  hosts: all
+  gather_facts: no
+  vars:
+    netbox_url: "http://10.33.99.14"
+    netbox_token: "a21c98f594043c2277e23384f983c04060c6a046"
+  
+  tasks:
+    - name: Get device data from NetBox
+      uri:
+        url: "{{ netbox_url }}/api/dcim/devices/"
+        method: GET
+        headers:
+          Authorization: "Token {{ netbox_token }}"
+        return_content: yes
+      delegate_to: localhost
+      run_once: true
+      register: netbox_devices
+
+    - name: Configure router interfaces based on NetBox data
+      ansible.builtin.shell: |
+        vtysh -c 'configure terminal' \
+              -c 'interface {{ item.name }}' \
+              -c 'description {{ item.description | default("Managed by NetBox") }}' \
+              -c 'ip address {{ item.ip_address }}' \
+              -c 'exit' \
+              -c 'write'
+      when: "'router' in group_names"
+      loop: "{{ device_interfaces | default([]) }}"
+
+    - name: Verify configuration
+      ansible.builtin.shell: vtysh -c "show interface brief"
+      when: "'router' in group_names"
+      register: interface_status
+
+    - name: Display interface status
+      debug:
+        var: interface_status.stdout_lines
+      when: "'router' in group_names"

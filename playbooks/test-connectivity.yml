@@ -1,0 +1,23 @@
+---
+- name: Test connectivity to FRRouting devices
+  hosts: routers
+  gather_facts: no
+  tasks:
+    - name: Check if FRR is running
+      ansible.builtin.command: vtysh -c "show version"
+      register: frr_version
+
+    - name: Display FRR version
+      debug:
+        msg: "{{ frr_version.stdout_lines }}"
+
+- name: Test connectivity to hosts
+  hosts: hosts
+  gather_facts: yes
+  tasks:
+    - name: Display host information
+      debug:
+        msg: |
+          Hostname: {{ ansible_hostname }}
+          OS: {{ ansible_distribution }}
+          IP: {{ ansible_default_ipv4.address }}

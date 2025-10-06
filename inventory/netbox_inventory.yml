@@ -1,0 +1,20 @@
+---
+plugin: netbox.netbox.nb_inventory
+api_endpoint: http://10.33.99.14
+token: a21c98f594043c2277e23384f983c04060c6a046
+validate_certs: False
+config_context: False
+interfaces: True
+group_by:
+  - device_roles
+  - sites
+  - device_types
+query_filters:
+  - site: lab-network
+compose:
+  ansible_host: primary_ip4
+keyed_groups:
+  - key: device_role.slug
+    prefix: role
+  - key: site.slug  
+    prefix: site

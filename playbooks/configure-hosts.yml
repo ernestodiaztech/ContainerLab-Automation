@@ -1,0 +1,12 @@
+---
+- name: Configure host networking (fixed for Alpine)
+  hosts: hosts
+  gather_facts: no
+  tasks:
+    - name: Set up basic networking on hosts (using raw for Alpine)
+      ansible.builtin.raw: |
+        ip addr add {{ host_ip }}/24 dev eth1 2>/dev/null || echo "IP may already exist"
+        ip link set eth1 up 2>/dev/null || echo "Interface may already be up"
+        echo "Host {{ ansible_host }} configured with {{ host_ip }}"
+      vars:
+        host_ip: "{{ '10.1.100.1' if 'host1' in ansible_host else '10.1.100.2' }}"
