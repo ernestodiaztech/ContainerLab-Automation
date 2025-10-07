@@ -16,5 +16,5 @@ compose:
 keyed_groups:
   - key: device_role.slug
     prefix: role
-  - key: site.slug  
+  - key: site.slug
     prefix: site

@@ -11,7 +11,7 @@
               -c 'exit' \
               -c 'exit' \
               -c 'write'
-      
+
     - name: Configure interface descriptions in FRR
       ansible.builtin.shell: |
         vtysh -c 'configure terminal' \
@@ -20,7 +20,7 @@
               -c 'exit' \
               -c 'exit' \
               -c 'write'
-    
+
     - name: Configure IP addresses using Linux commands
       ansible.builtin.shell: |
         ip addr add {{ router_ip }}/24 dev eth1 || true
