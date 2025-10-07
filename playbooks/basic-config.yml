@@ -3,7 +3,7 @@
   hosts: routers
   gather_facts: no
   tasks:
-    - name: Configure OSPF on routers
+    - name: Configure OSPF on routers update
       ansible.builtin.shell: |
         vtysh -c 'configure terminal' \
               -c 'router ospf' \
