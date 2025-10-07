@@ -12,7 +12,7 @@ jobs:
     
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Setup SSH
         run: |
@@ -36,7 +36,7 @@ jobs:
             ~/backups/$(date +%Y%m%d)/*.txt
 
       - name: Upload backup artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: network-backup-${{ github.run_number }}
           path: backups/*.tar.gz
