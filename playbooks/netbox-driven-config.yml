@@ -5,7 +5,7 @@
   vars:
     netbox_url: "http://10.33.99.14"
     netbox_token: "a21c98f594043c2277e23384f983c04060c6a046"
-  
+
   tasks:
     - name: Get device data from NetBox
       uri:
