@@ -1,0 +1,25 @@
+---
+- name: Backup Network Configurations
+  hosts: role_router
+  gather_facts: no
+  vars:
+    backup_dir: "~/backups/{{ ansible_date_time.date }}"
+
+  tasks:
+    - name: Create backup directory
+      file:
+        path: "{{ backup_dir }}"
+        state: directory
+      delegate_to: localhost
+      run_once: true
+
+    - name: Get running configuration
+      ansible.builtin.command: vtysh -c "show running-config"
+      register: running_config
+      changed_when: false
+
+    - name: Save configuration to file
+      copy:
+        content: "{{ running_config.stdout }}"
+        dest: "{{ backup_dir }}/{{ inventory_hostname }}-config.txt"
+      delegate_to: localhost
